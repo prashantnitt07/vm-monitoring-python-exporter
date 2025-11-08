@@ -19,41 +19,37 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Deploy to Ubuntu Server
+      - name: Prepare remote server
         run: |
-          echo "🚀 Connecting to remote server and deploying..."
           ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
-
-            echo "📦 Updating system packages..."
-            sudo apt update -y
-            sudo apt install -y python3-venv python3-pip git
-
-            echo "📁 Setting up application directory..."
+            sudo apt-get update -y
+            sudo apt-get install -y python3-venv python3-pip
             sudo mkdir -p /opt/ubuntu-metrics
             sudo chown -R $USER:$USER /opt/ubuntu-metrics
+          EOF
 
-            echo "⬇️ Pulling latest code..."
-            if [ ! -d /opt/ubuntu-metrics/.git ]; then
-              git clone https://github.com/${GITHUB_REPOSITORY}.git /opt/ubuntu-metrics
-            else
-              cd /opt/ubuntu-metrics
-              git fetch origin main
-              git reset --hard origin/main
-            fi
+      - name: Copy project files
+        run: |
+          scp -o StrictHostKeyChecking=no -r * ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/opt/ubuntu-metrics/
 
+      - name: Deploy on remote server
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+            set -e
             cd /opt/ubuntu-metrics
-            echo "🐍 Setting up virtual environment..."
+
             if [ ! -d venv ]; then
               python3 -m venv venv
             fi
+            ./venv/bin/pip install --upgrade pip
             ./venv/bin/pip install -r requirements.txt
 
-            echo "⚙️ Configuring systemd service..."
             sudo cp systemd/ubuntu-metrics-exporter.service /etc/systemd/system/${{ secrets.SERVICE_NAME }}.service
             sudo systemctl daemon-reload
             sudo systemctl enable ${{ secrets.SERVICE_NAME }}
             sudo systemctl restart ${{ secrets.SERVICE_NAME }}
+            sudo systemctl status ${{ secrets.SERVICE_NAME }} --no-pager
 
-            echo "✅ Deployment completed successfully!"
+            echo "✅ Deployed and restarted successfully!"
           EOF
