@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up SSH
@@ -21,49 +21,39 @@ jobs:
 
       - name: Deploy to Ubuntu Server
         run: |
-          echo "Deploying to ${{ secrets.SERVER_IP }}..."
+          echo "🚀 Connecting to remote server and deploying..."
           ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
             set -e
 
-            # Create working directory
-            sudo mkdir -p /opt/ubuntu-metrics
-            cd /opt/ubuntu-metrics
+            echo "📦 Updating system packages..."
+            sudo apt update -y
+            sudo apt install -y python3-venv python3-pip git
 
-            # Backup current script
-            if [ -f ubuntu_metrics_exporter.py ]; then
-              sudo cp ubuntu_metrics_exporter.py ubuntu_metrics_exporter.py.bak || true
+            echo "📁 Setting up application directory..."
+            sudo mkdir -p /opt/ubuntu-metrics
+            sudo chown -R $USER:$USER /opt/ubuntu-metrics
+
+            echo "⬇️ Pulling latest code..."
+            if [ ! -d /opt/ubuntu-metrics/.git ]; then
+              git clone https://github.com/${GITHUB_REPOSITORY}.git /opt/ubuntu-metrics
+            else
+              cd /opt/ubuntu-metrics
+              git fetch origin main
+              git reset --hard origin/main
             fi
 
-            # Pull latest files from GitHub
-            sudo rm -rf /opt/ubuntu-metrics/*
-            sudo apt update -y
-            sudo apt install -y python3-venv python3-pip
-
-            # Copy new files
-            exit
-          EOF
-
-      - name: Copy project files to server
-        run: |
-          scp -o StrictHostKeyChecking=no -r ./* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/opt/ubuntu-metrics/
-
-      - name: Configure & restart systemd service
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-            set -e
             cd /opt/ubuntu-metrics
-
-            # Setup virtual environment
+            echo "🐍 Setting up virtual environment..."
             if [ ! -d venv ]; then
               python3 -m venv venv
             fi
             ./venv/bin/pip install -r requirements.txt
 
-            # Setup systemd service
+            echo "⚙️ Configuring systemd service..."
             sudo cp systemd/ubuntu-metrics-exporter.service /etc/systemd/system/${{ secrets.SERVICE_NAME }}.service
             sudo systemctl daemon-reload
             sudo systemctl enable ${{ secrets.SERVICE_NAME }}
             sudo systemctl restart ${{ secrets.SERVICE_NAME }}
 
-            sudo systemctl status ${{ secrets.SERVICE_NAME }} --no-pager
+            echo "✅ Deployment completed successfully!"
           EOF
