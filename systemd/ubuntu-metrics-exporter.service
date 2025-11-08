@@ -11,8 +11,6 @@ ExecStart=/opt/ubuntu-metrics/venv/bin/python /opt/ubuntu-metrics/ubuntu_metrics
 Restart=always
 RestartSec=10
 Environment="PYTHONUNBUFFERED=1"
-
-# Log location (journalctl still works)
 StandardOutput=append:/var/log/ubuntu_metrics_exporter.log
 StandardError=append:/var/log/ubuntu_metrics_exporter.err
 
